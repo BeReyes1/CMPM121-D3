@@ -20,12 +20,15 @@ const CLASSROOM_LATLNG = leaflet.latLng(
 );
 const GAMEPLAY_ZOOM_LEVEL = 19;
 const CELL_SIZE = 0.0001;
-const GRID_RADIUS = 10;
+const GRID_RADIUS = 25;
 
-const playerCell = latLongToCell(CLASSROOM_LATLNG.lat, CLASSROOM_LATLNG.lng);
+let playerCell = latLongToCell(CLASSROOM_LATLNG.lat, CLASSROOM_LATLNG.lng);
 const cellTokens = new Map<string, number | null>();
 const cellMarkers = new Map<string, L.Marker>();
+const visibleCells = new Set<string>();
+const cellRects = new Map<string, L.Rectangle>();
 let playerToken: number | null;
+const winningToken: number = 4;
 
 //helper functions
 type CellCoord = { x: number; y: number };
@@ -55,6 +58,11 @@ const map = leaflet.map(mapDiv, {
   scrollWheelZoom: false,
 });
 
+map.on("moveend", () => {
+  const center = map.getCenter();
+  renderVisibleCells(center);
+});
+
 leaflet
   .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
@@ -70,37 +78,59 @@ const _playerMarker = leaflet.circleMarker(CLASSROOM_LATLNG, {
   fillOpacity: 0.9,
 }).addTo(map);
 
-function renderGrid(centerLatLng: L.LatLng) {
+function renderVisibleCells(centerLatLng: L.LatLng) {
   const centerCell = latLongToCell(centerLatLng.lat, centerLatLng.lng);
+  const newVisibleCells = new Set<string>();
 
   for (let dy = -GRID_RADIUS; dy <= GRID_RADIUS; dy++) {
     for (let dx = -GRID_RADIUS; dx <= GRID_RADIUS; dx++) {
       const cellX = centerCell.x + dx;
       const cellY = centerCell.y + dy;
       const key = getCellKey(cellX, cellY);
+      newVisibleCells.add(key);
 
-      const cellOrigin = cellToLatLong(cellX, cellY);
-      const cellBounds: L.LatLngBoundsExpression = [
-        [cellOrigin.lat, cellOrigin.lng],
-        [cellOrigin.lat + CELL_SIZE, cellOrigin.lng + CELL_SIZE],
-      ];
-
-      const rect = leaflet.rectangle(cellBounds, {
-        color: "blue",
-        weight: 1,
-        fillOpacity: 0.1,
-      }).addTo(map);
-
-      const tokenValue = getTokenValueForCell(cellX, cellY);
-      cellTokens.set(key, tokenValue);
-
-      if (tokenValue) {
-        updateCellMarker(cellX, cellY);
+      if (!visibleCells.has(key)) {
+        generateCell(cellX, cellY);
       }
-
-      rect.addEventListener("click", () => handleCellClick(cellX, cellY));
     }
   }
+  for (const key of visibleCells) {
+    if (!newVisibleCells.has(key)) {
+      const marker = cellMarkers.get(key);
+      if (marker) marker.remove();
+      cellMarkers.delete(key);
+
+      const rect = cellRects.get(key);
+      if (rect) rect.remove();
+      cellRects.delete(key);
+    }
+  }
+
+  visibleCells.clear();
+  for (const key of newVisibleCells) visibleCells.add(key);
+}
+
+function generateCell(cellX: number, cellY: number) {
+  const key = getCellKey(cellX, cellY);
+  const cellOrigin = cellToLatLong(cellX, cellY);
+  const cellBounds: L.LatLngBoundsExpression = [
+    [cellOrigin.lat, cellOrigin.lng],
+    [cellOrigin.lat + CELL_SIZE, cellOrigin.lng + CELL_SIZE],
+  ];
+
+  const rect = leaflet.rectangle(cellBounds, {
+    color: "blue",
+    weight: 1,
+    fillOpacity: 0.1,
+  }).addTo(map);
+
+  cellRects.set(key, rect);
+
+  const tokenValue = getTokenValueForCell(cellX, cellY);
+  cellTokens.set(key, tokenValue);
+
+  if (tokenValue) updateCellMarker(cellX, cellY);
+  rect.addEventListener("click", () => handleCellClick(cellX, cellY));
 }
 
 function handleCellClick(cellX: number, cellY: number) {
@@ -169,6 +199,7 @@ document.body.append(inventoryDiv);
 //updating elements
 function updateInventoryDisplay() {
   inventoryDiv.innerText = playerToken ? `Holding: ${playerToken}` : "Empty";
+  checkWinCondition();
 }
 
 function updateCellMarker(cellX: number, cellY: number) {
@@ -200,5 +231,53 @@ function updateCellMarker(cellX: number, cellY: number) {
   }
 }
 
-renderGrid(CLASSROOM_LATLNG);
+//moving
+function movePlayer(dx: number, dy: number) {
+  const targetCell = {
+    x: playerCell.x + dx,
+    y: playerCell.y + dy,
+  };
+
+  const cellOrigin = cellToLatLong(targetCell.x, targetCell.y);
+  const newLatLng = leaflet.latLng(
+    cellOrigin.lat + CELL_SIZE / 2,
+    cellOrigin.lng + CELL_SIZE / 2,
+  );
+
+  playerCell = targetCell;
+  _playerMarker.setLatLng(newLatLng);
+  map.panTo(newLatLng);
+}
+
+const controls = document.createElement("div");
+controls.innerHTML = `
+  <button id="move-north">↑</button>
+  <button id="move-south">↓</button>
+  <button id="move-west">←</button>
+  <button id="move-east">→</button>
+`;
+controls.style.position = "absolute";
+controls.style.bottom = "10px";
+controls.style.left = "10px";
+controls.style.zIndex = "1000";
+document.body.append(controls);
+
+(document.getElementById("move-north")! as HTMLButtonElement).onclick = () =>
+  movePlayer(0, 1);
+(document.getElementById("move-south")! as HTMLButtonElement).onclick = () =>
+  movePlayer(0, -1);
+(document.getElementById("move-west")! as HTMLButtonElement).onclick = () =>
+  movePlayer(-1, 0);
+(document.getElementById("move-east")! as HTMLButtonElement).onclick = () =>
+  movePlayer(1, 0);
+
+function checkWinCondition() {
+  if (playerToken == winningToken) {
+    alert("You win!");
+  }
+}
+
+//starting game
+//renderGrid(CLASSROOM_LATLNG);
+renderVisibleCells(CLASSROOM_LATLNG);
 updateInventoryDisplay();
