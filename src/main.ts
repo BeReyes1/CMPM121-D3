@@ -27,6 +27,7 @@ const cellTokens = new Map<string, number | null>();
 const cellMarkers = new Map<string, L.Marker>();
 const visibleCells = new Set<string>();
 const cellRects = new Map<string, L.Rectangle>();
+const cellStates = new Map<string, number | null>();
 let playerToken: number | null;
 const winningToken: number = 4;
 
@@ -91,6 +92,9 @@ function renderVisibleCells(centerLatLng: L.LatLng) {
 
       if (!visibleCells.has(key)) {
         generateCell(cellX, cellY);
+        if (cellTokens.has(key)) {
+          cellStates.set(key, cellTokens.get(key)!);
+        }
       }
     }
   }
@@ -103,6 +107,8 @@ function renderVisibleCells(centerLatLng: L.LatLng) {
       const rect = cellRects.get(key);
       if (rect) rect.remove();
       cellRects.delete(key);
+
+      cellTokens.delete(key);
     }
   }
 
@@ -126,7 +132,13 @@ function generateCell(cellX: number, cellY: number) {
 
   cellRects.set(key, rect);
 
-  const tokenValue = getTokenValueForCell(cellX, cellY);
+  let tokenValue: number | null;
+
+  if (cellStates.has(key)) {
+    tokenValue = cellStates.get(key)!;
+  } else {
+    tokenValue = getTokenValueForCell(cellX, cellY);
+  }
   cellTokens.set(key, tokenValue);
 
   if (tokenValue) updateCellMarker(cellX, cellY);
@@ -153,6 +165,7 @@ function handleCellClick(cellX: number, cellY: number) {
   if (!playerToken) {
     playerToken = tokenValue;
     cellTokens.set(key, null);
+    cellStates.set(key, null);
     updateInventoryDisplay();
     updateCellMarker(cellX, cellY);
     return;
@@ -163,11 +176,13 @@ function handleCellClick(cellX: number, cellY: number) {
       const newValue = playerToken * 2;
       playerToken = null;
       cellTokens.set(key, newValue);
+      cellStates.set(key, newValue);
       updateInventoryDisplay();
       updateCellMarker(cellX, cellY);
     } else {
       playerToken = tokenValue;
       cellTokens.set(key, null);
+      cellStates.set(key, null);
       updateInventoryDisplay();
       updateCellMarker(cellX, cellY);
     }
@@ -177,9 +192,7 @@ function handleCellClick(cellX: number, cellY: number) {
 function getTokenValueForCell(x: number, y: number): number | null {
   const r = luck(`cell:${x},${y}`);
   if (r < 0.8) return null;
-  if (r < 0.9) return 1;
-  if (r < 0.98) return 2;
-  return 7;
+  return 1;
 }
 
 //creating inventory

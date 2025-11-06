@@ -29,3 +29,13 @@ Key gameplay challenge: Can players move along the map with new cells appearing
 - [x] Be able to move play, cell by cell
 - [x] Create a dynamic grid that updates via moving
 - [x] Add a victory condition
+
+## D3.c: Object Persistence
+
+Key technical challenge: Can I use the flyweight and memento patterns to remove and store data?
+Key gameplay challenge: Can cells reload their token state when reappearing on screen?
+
+### Steps C
+
+- [x] Have objects persist through flyweight+memento patterns through map
+- [x] Update gameplay conditions
