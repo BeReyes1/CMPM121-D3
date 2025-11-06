@@ -187,11 +187,6 @@ function updateCellMarker(cellX: number, cellY: number) {
       origin.lng + CELL_SIZE / 2,
     );
 
-    const oldMarker = cellMarkers.get(key);
-    if (oldMarker) {
-      oldMarker.remove();
-    }
-
     const marker = leaflet.marker(center, {
       icon: leaflet.divIcon({
         className: "token-label",
