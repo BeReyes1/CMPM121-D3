@@ -278,6 +278,5 @@ function checkWinCondition() {
 }
 
 //starting game
-//renderGrid(CLASSROOM_LATLNG);
 renderVisibleCells(CLASSROOM_LATLNG);
 updateInventoryDisplay();

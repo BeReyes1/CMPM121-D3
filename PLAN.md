@@ -22,7 +22,7 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 ## D3.b: Globe-spanning Gameplay
 
 Key technical challenge: Can you assemble a map-based user interface using the Leaflet mapping framework?
-Key gameplay challenge: Can players collect and craft tokens from nearby locations to finally make one of sufficiently high value?
+Key gameplay challenge: Can players move along the map with new cells appearing
 
 ### Steps B
 
