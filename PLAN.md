@@ -15,8 +15,8 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 - [x] use loops to draw a whole grid of cells on the map
 - [x] allow only nearby cells to be interacted with
 - [x] put tokens on cells that have a random value
-- [] player can pick up token from cell and removes value from cell
-- [] display if player has token
-- [] crafting system where token doubles value
+- [x] player can pick up token from cell and removes value from cell
+- [x] display if player has token
+- [x] crafting system where token doubles value
 
 - ...
