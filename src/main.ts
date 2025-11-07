@@ -9,11 +9,10 @@ import "./_leafletWorkaround.ts";
 
 import luck from "./_luck.ts";
 
-const mapDiv = document.createElement("div");
-mapDiv.id = "map";
-document.body.append(mapDiv);
+/**
+ * SECTION: GAMEPLAY PARAMETERS
+ */
 
-//Gameplay parameters
 const CLASSROOM_LATLNG = leaflet.latLng(
   36.997936938057016,
   -122.05703507501151,
@@ -22,6 +21,9 @@ const GAMEPLAY_ZOOM_LEVEL = 19;
 const CELL_SIZE = 0.0001;
 const GRID_RADIUS = 25;
 
+const winningToken: number = 256;
+let playerMovement: Movement | null;
+
 let playerCell = latLongToCell(CLASSROOM_LATLNG.lat, CLASSROOM_LATLNG.lng);
 const cellTokens = new Map<string, number | null>();
 const cellMarkers = new Map<string, L.Marker>();
@@ -29,9 +31,10 @@ const visibleCells = new Set<string>();
 const cellRects = new Map<string, L.Rectangle>();
 const cellStates = new Map<string, number | null>();
 let playerToken: number | null;
-const winningToken: number = 4;
 
-//helper functions
+/**
+ * SECTION: HELPER FUNCTIONS
+ */
 type CellCoord = { x: number; y: number };
 
 function latLongToCell(lat: number, lng: number): CellCoord {
@@ -49,7 +52,14 @@ function getCellKey(x: number, y: number): string {
   return `${x},${y}`;
 }
 
-//creating the map
+/**
+ * SECTION: CREATING MAP+CELLS
+ */
+
+const mapDiv = document.createElement("div");
+mapDiv.id = "map";
+document.body.append(mapDiv);
+
 const map = leaflet.map(mapDiv, {
   center: CLASSROOM_LATLNG,
   zoom: GAMEPLAY_ZOOM_LEVEL,
@@ -195,7 +205,10 @@ function getTokenValueForCell(x: number, y: number): number | null {
   return 1;
 }
 
-//creating inventory
+/**
+ * SECTION: CREATING INVENTORY
+ */
+
 const inventoryDiv = document.createElement("div");
 inventoryDiv.id = "inventory";
 inventoryDiv.style.position = "absolute";
@@ -209,7 +222,10 @@ inventoryDiv.style.fontSize = "20px";
 inventoryDiv.style.zIndex = "1000";
 document.body.append(inventoryDiv);
 
-//updating elements
+/**
+ * SECTION: UPDATING ELEMENTS
+ */
+
 function updateInventoryDisplay() {
   inventoryDiv.innerText = playerToken ? `Holding: ${playerToken}` : "Empty";
   checkWinCondition();
@@ -242,24 +258,17 @@ function updateCellMarker(cellX: number, cellY: number) {
 
     cellMarkers.set(key, marker);
   }
+
+  saveGame();
 }
 
-//moving
-function movePlayer(dx: number, dy: number) {
-  const targetCell = {
-    x: playerCell.x + dx,
-    y: playerCell.y + dy,
-  };
+/**
+ * SECTION: MOVEMENT
+ */
 
-  const cellOrigin = cellToLatLong(targetCell.x, targetCell.y);
-  const newLatLng = leaflet.latLng(
-    cellOrigin.lat + CELL_SIZE / 2,
-    cellOrigin.lng + CELL_SIZE / 2,
-  );
-
-  playerCell = targetCell;
-  _playerMarker.setLatLng(newLatLng);
-  map.panTo(newLatLng);
+interface Movement {
+  onEnable(): void;
+  onDisable(): void;
 }
 
 const controls = document.createElement("div");
@@ -272,17 +281,190 @@ controls.innerHTML = `
 controls.style.position = "absolute";
 controls.style.bottom = "10px";
 controls.style.left = "10px";
-controls.style.zIndex = "1000";
 document.body.append(controls);
 
-(document.getElementById("move-north")! as HTMLButtonElement).onclick = () =>
-  movePlayer(0, 1);
-(document.getElementById("move-south")! as HTMLButtonElement).onclick = () =>
-  movePlayer(0, -1);
-(document.getElementById("move-west")! as HTMLButtonElement).onclick = () =>
-  movePlayer(-1, 0);
-(document.getElementById("move-east")! as HTMLButtonElement).onclick = () =>
-  movePlayer(1, 0);
+class ButtonControls implements Movement {
+  private northHandler = () => this.movePlayer(0, 1);
+  private southHandler = () => this.movePlayer(0, -1);
+  private westHandler = () => this.movePlayer(-1, 0);
+  private eastHandler = () => this.movePlayer(1, 0);
+
+  onEnable() {
+    (document.getElementById("move-north")! as HTMLButtonElement)
+      .addEventListener("click", this.northHandler);
+    (document.getElementById("move-south")! as HTMLButtonElement)
+      .addEventListener("click", this.southHandler);
+    (document.getElementById("move-west")! as HTMLButtonElement)
+      .addEventListener("click", this.westHandler);
+    (document.getElementById("move-east")! as HTMLButtonElement)
+      .addEventListener("click", this.eastHandler);
+    this.determineDisableButtons(false);
+  }
+
+  onDisable() {
+    (document.getElementById("move-north")! as HTMLButtonElement)
+      .removeEventListener("click", this.northHandler);
+    (document.getElementById("move-south")! as HTMLButtonElement)
+      .removeEventListener("click", this.southHandler);
+    (document.getElementById("move-west")! as HTMLButtonElement)
+      .removeEventListener("click", this.westHandler);
+    (document.getElementById("move-east")! as HTMLButtonElement)
+      .removeEventListener("click", this.eastHandler);
+    this.determineDisableButtons(true);
+  }
+
+  movePlayer(dx: number, dy: number) {
+    const targetCell = {
+      x: playerCell.x + dx,
+      y: playerCell.y + dy,
+    };
+
+    updatePlayerPosition(targetCell);
+  }
+
+  determineDisableButtons(b: boolean) {
+    (document.getElementById("move-north")! as HTMLButtonElement).disabled = b;
+    (document.getElementById("move-south")! as HTMLButtonElement).disabled = b;
+    (document.getElementById("move-east")! as HTMLButtonElement).disabled = b;
+    (document.getElementById("move-west")! as HTMLButtonElement).disabled = b;
+  }
+}
+
+class GeoControls implements Movement {
+  private watchId: number | null = null;
+  onEnable() {
+    if (!navigator.geolocation) {
+      alert("Geolocation not found");
+    }
+
+    this.watchId = navigator.geolocation.watchPosition(
+      (position) => this.updatePosition(position),
+      (error) => console.error(error),
+      { enableHighAccuracy: true, maximumAge: 1000 },
+    );
+  }
+  onDisable() {
+    if (this.watchId !== null) {
+      navigator.geolocation.clearWatch(this.watchId);
+    }
+  }
+
+  private updatePosition(position: GeolocationPosition) {
+    const lat = position.coords.latitude;
+    const lng = position.coords.longitude;
+    const targetCell = latLongToCell(lat, lng);
+    updatePlayerPosition(targetCell);
+  }
+}
+
+function updatePlayerPosition(targetCell: CellCoord) {
+  const cellOrigin = cellToLatLong(targetCell.x, targetCell.y);
+  const newLatLng = leaflet.latLng(
+    cellOrigin.lat + CELL_SIZE / 2,
+    cellOrigin.lng + CELL_SIZE / 2,
+  );
+
+  playerCell = targetCell;
+  _playerMarker.setLatLng(newLatLng);
+  map.panTo(newLatLng);
+}
+
+const urlParams = new URLSearchParams(globalThis.location.search);
+let movementMode: "buttons" | "geolocation" =
+  (urlParams.get("movement") as "buttons" | "geolocation") || "buttons";
+
+playerMovement = movementMode === "geolocation"
+  ? new GeoControls()
+  : new ButtonControls();
+
+playerMovement.onEnable();
+
+const switchButton = document.createElement("button");
+switchButton.innerText = "Switch Movement";
+switchButton.style.position = "absolute";
+switchButton.style.bottom = "60px";
+switchButton.style.left = "10px";
+switchButton.style.zIndex = "1000";
+document.body.append(switchButton);
+
+switchButton.onclick = () => {
+  const newMode = movementMode === "buttons" ? "geolocation" : "buttons";
+  switchMovementMode(newMode);
+  movementMode = newMode;
+};
+
+function switchMovementMode(mode: "buttons" | "geolocation") {
+  if (playerMovement) {
+    playerMovement.onDisable();
+  }
+
+  if (mode === "geolocation") {
+    playerMovement = new GeoControls();
+  } else {
+    playerMovement = new ButtonControls();
+  }
+
+  playerMovement.onEnable();
+}
+
+/**
+ * SECTION: MANAGING SAVED DATA
+ */
+
+function saveGame() {
+  const data = {
+    playerCell,
+    playerToken,
+    cellStates: Array.from(cellStates.entries()),
+  };
+
+  localStorage.setItem("game", JSON.stringify(data));
+}
+
+function loadGame() {
+  const save = localStorage.getItem("game");
+  if (!save) return;
+
+  const data = JSON.parse(save);
+  playerCell = data.playerCell;
+  playerToken = data.playerToken;
+  cellStates.clear();
+  data.cellStates.forEach(([key, value]: [string, number | null]) =>
+    cellStates.set(key, value)
+  );
+
+  updatePlayerPosition(playerCell);
+  map.setView(cellToLatLong(playerCell.x, playerCell.y), GAMEPLAY_ZOOM_LEVEL);
+}
+
+const newGameButton = document.createElement("button");
+newGameButton.innerText = "New Game";
+newGameButton.style.position = "absolute";
+newGameButton.style.bottom = "10px";
+newGameButton.style.right = "10px";
+document.body.append(newGameButton);
+
+newGameButton.addEventListener("click", () => newGame());
+
+function newGame() {
+  localStorage.removeItem("game");
+  cellStates.clear();
+  cellTokens.clear();
+  cellMarkers.forEach((marker) => marker.remove());
+  cellMarkers.clear();
+  cellRects.forEach((rect) => rect.remove());
+  cellRects.clear();
+  visibleCells.clear();
+
+  playerToken = null;
+  playerCell = latLongToCell(CLASSROOM_LATLNG.lat, CLASSROOM_LATLNG.lng);
+  _playerMarker.setLatLng(CLASSROOM_LATLNG);
+
+  renderVisibleCells(CLASSROOM_LATLNG);
+  updateInventoryDisplay();
+  map.setView(cellToLatLong(playerCell.x, playerCell.y), GAMEPLAY_ZOOM_LEVEL);
+  alert("New game started!");
+}
 
 function checkWinCondition() {
   if (playerToken == winningToken) {
@@ -290,6 +472,10 @@ function checkWinCondition() {
   }
 }
 
-//starting game
+/**
+ * SECTION: STARTING GAME
+ */
+
+loadGame();
 renderVisibleCells(CLASSROOM_LATLNG);
 updateInventoryDisplay();

@@ -39,3 +39,15 @@ Key gameplay challenge: Can cells reload their token state when reappearing on s
 
 - [x] Have objects persist through flyweight+memento patterns through map
 - [x] Update gameplay conditions
+
+## D3.d: Gameplay Across Real-world Space and Time
+
+Key technical challenges: Can your software remember game state even when the page is closed? Is the player character’s in-game movement controlled by the real-world geolocation of their device?
+Key gameplay challenge: Can the user test the game with multiple gameplay sessions, some involving real-world movement and some involving simulated movement?
+
+### Steps D
+
+- [x] Use facade pattern to implement movement for two control schemes via a shared interface
+- [x] Be able to switch between two control schemes
+- [x] Persist game state on page reloads
+- [x] Button for new game
